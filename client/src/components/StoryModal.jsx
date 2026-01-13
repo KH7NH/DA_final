@@ -130,7 +130,8 @@ const StoryModal = ({setShowModal, fetchStories}) => {
                 </label>
             </div>
             <button onClick={()=> toast.promise(handleCreateStory(), {
-                loading: 'Saving...',})} className='flex items-center justify-center gap-2 text-white py-3 mt-4 w-full rounded bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition cursor-pointer'>
+                loading: 'Saving...',})} className='flex items-center justify-center gap-2 text-white py-3 mt-4 w-full rounded bg-gradient-to-r from-[oklch(55.6%_0_0)] to-[oklch(14.1%_0.005_285.823)]
+        hover:from-[oklch(21.6%_0.006_56.043)] hover:to-[oklch(25%_0.006_56.043)] active:scale-95 transition cursor-pointer'>
                 <Sparkle size={18}/> Create Story
             </button>
 

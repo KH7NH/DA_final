@@ -70,7 +70,8 @@ const UserCard = ({user}) => {
 
         <div className='flex mt-4 gap-2'>
             {/* Follow Button */}
-            <button onClick={handleFollow} disabled={currentUser?.following.includes(user._id)} className='w-full py-2 rounded-md  flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer'>
+            <button onClick={handleFollow} disabled={currentUser?.following.includes(user._id)} className='w-full py-2 rounded-md  flex justify-center items-center gap-2 bg-gradient-to-r from-[oklch(55.6%_0_0)] to-[oklch(14.1%_0.005_285.823)]
+        hover:from-[oklch(21.6%_0.006_56.043)] hover:to-[oklch(25%_0.006_56.043)] active:scale-95 transition text-white cursor-pointer'>
                 <UserPlus className='w-4 h-4'/> {currentUser?.following.includes(user._id) ? 'Following' : 'Follow'}
             </button>
             {/* Connection Request Button / Message Button */}

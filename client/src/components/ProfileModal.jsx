@@ -114,7 +114,8 @@ const ProfileModal = ({setShowEdit}) => {
 
                 <button onClick={()=> setShowEdit(false)} type='button' className='px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer'>Cancel</button>
 
-                <button type='submit' className='px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 transition cursor-pointer'>Save Changes</button>
+                <button type='submit' className='px-4 py-2 bg-gradient-to-r from-[oklch(70.6%_0_0)] to-[oklch(70.6%_0_0)]
+        hover:from-[oklch(50.6%_0.006_56.043)] hover:to-[oklch(25%_0.006_56.043)] rounded-lg transition cursor-pointer'>Save Changes</button>
             </div>
 
             </form>
