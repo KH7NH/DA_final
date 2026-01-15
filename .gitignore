@@ -19,3 +19,5 @@ AI_service/models/*.h5
 AI_service/models/checkpoints/
 **/logs/
 **/__pycache__/
+__pycache__/
+*.pyc

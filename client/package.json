@@ -12,6 +12,8 @@
   "dependencies": {
     "@clerk/clerk-react": "^5.36.0",
     "@reduxjs/toolkit": "^2.8.2",
+    "@stripe/react-stripe-js": "^5.4.1",
+    "@stripe/stripe-js": "^8.6.1",
     "@tailwindcss/vite": "^4.1.11",
     "axios": "^1.11.0",
     "lucide-react": "^0.525.0",

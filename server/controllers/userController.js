@@ -5,6 +5,8 @@ import Connection from "../models/Connection.js";
 import Post from "../models/Post.js";
 import User from "../models/User.js";
 import { clerkClient } from "@clerk/express";
+import { moderateImage } from "../utils/aiModeration.js";
+
 
 /* =====================================================
    HELPER: GET OR CREATE USER (SAFE – NO DUPLICATE)
@@ -55,10 +57,11 @@ export const updateUserData = async (req, res) => {
 
     const update = {};
 
+    // ===== Validate username =====
     if (username && username !== user.username) {
       const exists = await User.findOne({ username });
       if (exists) {
-        return res.json({ success: false, message: "Username already taken" });
+        return res.status(400).json({ success: false, message: "Username already taken" });
       }
       update.username = username;
     }
@@ -68,29 +71,87 @@ export const updateUserData = async (req, res) => {
     if (full_name !== undefined) update.full_name = full_name;
 
     const profile = req.files?.profile?.[0];
+    const cover = req.files?.cover?.[0];
+
+    // Helper: cleanup file temp
+    const safeUnlink = (p) => {
+      try {
+        if (p) fs.unlinkSync(p);
+      } catch (_) {}
+    };
+
+    // ===== AI Moderation: block sensitive avatar/cover =====
+    // Nếu 1 trong 2 ảnh nhạy cảm -> chặn toàn bộ (không update)
+    if (profile) {
+      const ai = await moderateImage(profile.path);
+      const flagged = !!ai?.is_sensitive || ai?.final === "NHẠY CẢM";
+      if (flagged) {
+        safeUnlink(profile.path);
+        if (cover) safeUnlink(cover.path);
+        return res.status(400).json({
+          success: false,
+          message: "Ảnh avatar không phù hợp (nhạy cảm/kinh dị). Vui lòng chọn ảnh khác.",
+        });
+      }
+    }
+
+    if (cover) {
+      const ai = await moderateImage(cover.path);
+      const flagged = !!ai?.is_sensitive || ai?.final === "NHẠY CẢM";
+      if (flagged) {
+        safeUnlink(cover.path);
+        if (profile) safeUnlink(profile.path);
+        return res.status(400).json({
+          success: false,
+          message: "Ảnh nền không phù hợp (nhạy cảm/kinh dị). Vui lòng chọn ảnh khác.",
+        });
+      }
+    }
+
+    // ===== Upload profile to ImageKit =====
     if (profile) {
       const buffer = fs.readFileSync(profile.path);
       const upload = await imagekit.upload({
         file: buffer,
         fileName: profile.originalname,
+        folder: "profiles",
       });
 
       update.profile_picture = imagekit.url({
         path: upload.filePath,
-        transformation: [{ width: 512 }, { format: "webp" }],
+        transformation: [{ width: 512 }, { format: "webp" }, { quality: "auto" }],
       });
+
+      safeUnlink(profile.path);
     }
 
-    const updated = await User.findByIdAndUpdate(user._id, update, {
-      new: true,
-    });
+    // ===== Upload cover to ImageKit =====
+    if (cover) {
+      const buffer = fs.readFileSync(cover.path);
+      const upload = await imagekit.upload({
+        file: buffer,
+        fileName: cover.originalname,
+        folder: "covers",
+      });
 
-    res.json({ success: true, user: updated });
+      update.cover_photo = imagekit.url({
+        path: upload.filePath,
+        transformation: [{ width: 1400 }, { format: "webp" }, { quality: "auto" }],
+      });
+
+      safeUnlink(cover.path);
+    }
+
+    const updated = await User.findByIdAndUpdate(user._id, update, { new: true });
+
+    return res.json({ success: true, user: updated });
   } catch (err) {
     console.log(err);
-    res.json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
 
 /* =====================================================
    DISCOVER USERS

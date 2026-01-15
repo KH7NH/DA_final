@@ -11,7 +11,11 @@ const storySchema = new mongoose.Schema(
 
     content: { type: String, default: "" },
 
+    // URL hiển thị (có thể blur nếu nhạy cảm)
     media_url: { type: String, default: "" },
+
+    // ✅ Lưu ImageKit filePath để generate original URL khi reveal
+    media_file_path: { type: String, default: "" },
 
     media_type: {
       type: String,

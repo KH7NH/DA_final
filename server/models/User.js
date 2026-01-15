@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
@@ -30,37 +30,54 @@ const userSchema = new mongoose.Schema(
 
     bio: {
       type: String,
-      default: 'Hey there! I am using PingUp.',
+      default: "Hey there! I am using PingUp.",
     },
 
     profile_picture: {
       type: String,
-      default: '',
+      default: "",
     },
 
     cover_photo: {
       type: String,
-      default: '',
+      default: "",
     },
 
     location: {
       type: String,
-      default: '',
+      default: "",
     },
 
-    followers: [
-      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    ],
+    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    connections: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
-    following: [
-      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    ],
+    // ===== Age verification (A) via Stripe SetupIntent (no charge) =====
+    stripe_customer_id: {
+      type: String,
+      default: "",
+      index: true,
+    },
 
-    connections: [
-      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    ],
+    // 0 = chưa verify, 1 = verify kiểu A
+    age_verified_level: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+
+    age_verified_at: {
+      type: Date,
+      default: null,
+    },
+
+    // optional: lưu payment_method id để audit/debug (không bắt buộc)
+    age_verified_payment_method: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
 
-export default mongoose.model('User', userSchema);
+export default mongoose.model("User", userSchema);

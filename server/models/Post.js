@@ -17,6 +17,12 @@ const postSchema = new mongoose.Schema(
       default: [],
     },
 
+    // ✅ Lưu ImageKit filePath theo đúng thứ tự image_urls
+    image_file_paths: {
+      type: [String],
+      default: [],
+    },
+
     post_type: {
       type: String,
       enum: ["text", "image", "text_with_image"],
@@ -47,7 +53,7 @@ const postSchema = new mongoose.Schema(
   { timestamps: true, minimize: false }
 );
 
-// (Tuỳ chọn) tối ưu query feed
+// tối ưu query feed
 postSchema.index({ createdAt: -1 });
 
 const Post = mongoose.model("Post", postSchema);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ImageIcon, SendHorizonal } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
@@ -11,7 +11,7 @@ const ChatBox = () => {
   const { messages } = useSelector((state) => state.messages);
   const connections = useSelector((state) => state.connections.connections);
 
-  // ✅ mongo user hiện tại (bạn đang dùng state.user.value ở các chỗ khác)
+  // Mongo user hiện tại
   const currentUser = useSelector((state) => state.user.value);
 
   const { userId } = useParams(); // ObjectId of friend
@@ -21,13 +21,17 @@ const ChatBox = () => {
   const [text, setText] = useState("");
   const [image, setImage] = useState(null);
 
-  // ✅ preview url
   const [imagePreview, setImagePreview] = useState(null);
-
   const [user, setUser] = useState(null);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // dùng để tránh add trùng khi SSE echo lại message mình vừa gửi
+  const lastAddedIdRef = useRef(null);
+
+  const meId = useMemo(() => String(currentUser?._id || ""), [currentUser?._id]);
+  const friendId = useMemo(() => String(userId || ""), [userId]);
 
   /* ================= FETCH MESSAGES ================= */
   useEffect(() => {
@@ -74,6 +78,59 @@ const ChatBox = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  /* ================= SSE REALTIME ================= */
+  useEffect(() => {
+    // chỉ connect khi đã có mongo _id
+    if (!meId) return;
+
+    const sseUrl = `${import.meta.env.VITE_BASEURL}/api/message/sse/${meId}`;
+    const es = new EventSource(sseUrl);
+
+    es.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+
+        const fromId = String(msg?.from_user_id?._id || msg?.from_user_id || "");
+        const toId = String(msg?.to_user_id?._id || msg?.to_user_id || "");
+
+        // chỉ add nếu message thuộc cuộc chat đang mở
+        const belongsToThisChat =
+          (fromId === meId && toId === friendId) ||
+          (fromId === friendId && toId === meId);
+
+        if (!belongsToThisChat) return;
+
+        // tránh add trùng theo _id
+        const msgId = String(msg?._id || "");
+        if (msgId && lastAddedIdRef.current === msgId) return;
+
+        // cũng tránh trùng nếu state đã có message id đó rồi
+        // (nhẹ nhàng: check nhanh last message)
+        const last = messages[messages.length - 1];
+        const lastId = String(last?._id || "");
+        if (msgId && lastId === msgId) return;
+
+        lastAddedIdRef.current = msgId || null;
+        dispatch(addMessage(msg));
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    es.addEventListener("connected", () => {});
+    es.addEventListener("ping", () => {});
+
+    es.onerror = () => {
+      // SSE tự reconnect; không close để nó tự nối lại
+    };
+
+    return () => {
+      es.close();
+    };
+    // ⚠️ friendId thay đổi khi bạn chuyển cuộc chat -> filter chat đúng
+    // messages đưa vào deps sẽ khiến reconnect liên tục -> không nên
+  }, [meId, friendId, dispatch]); // không để messages vào deps
+
   /* ================= PICK IMAGE ================= */
   const onPickImage = (e) => {
     const file = e.target.files?.[0];
@@ -85,7 +142,6 @@ const ChatBox = () => {
       return;
     }
 
-    // cleanup preview cũ
     if (imagePreview) URL.revokeObjectURL(imagePreview);
 
     setImage(file);
@@ -101,19 +157,29 @@ const ChatBox = () => {
       const formData = new FormData();
       formData.append("to_user_id", userId);
       formData.append("text", text);
-      if (image) formData.append("image", image);
+      if (image) formData.append("image", image); // ✅ field name phải là "image"
 
       const { data } = await api.post("/api/message/send", formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!data.success) throw new Error(data.message);
+      if (!data?.success) throw new Error(data?.message || "Send failed");
+
+      // tránh SSE echo add trùng: lưu id vừa gửi
+      const sent = data.message;
+      if (sent?._id) lastAddedIdRef.current = String(sent._id);
 
       setText("");
       clearImage();
-      dispatch(addMessage(data.message));
+
     } catch (err) {
       toast.error(err?.response?.data?.message || err.message);
+
+      // nếu bị chặn ảnh nhạy cảm, clear luôn ảnh để chọn lại
+      const status = err?.response?.status;
+      if (status === 400 && image) {
+        clearImage();
+      }
     }
   };
 
@@ -137,18 +203,24 @@ const ChatBox = () => {
             const fromId = msg.from_user_id?._id || msg.from_user_id;
             const myId = currentUser?._id;
 
-            // ✅ isMine = tin nhắn do mình gửi
             const isMine = myId && String(fromId) === String(myId);
 
             return (
-              <div key={msg._id || i} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+              <div
+                key={msg._id || i}
+                className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+              >
                 <div
                   className={`p-2 rounded-lg shadow max-w-sm text-sm ${
                     isMine ? "bg-indigo-100 rounded-br-none" : "bg-white rounded-bl-none"
                   }`}
                 >
                   {msg.message_type === "image" && msg.media_url && (
-                    <img src={msg.media_url} className="rounded mb-1 max-w-[260px]" alt="" />
+                    <img
+                      src={msg.media_url}
+                      className="rounded mb-1 max-w-[260px]"
+                      alt=""
+                    />
                   )}
                   {msg.text && <p>{msg.text}</p>}
                 </div>
@@ -162,7 +234,6 @@ const ChatBox = () => {
       {/* INPUT */}
       <div className="p-3 border-t bg-white">
         <div className="max-w-xl mx-auto">
-          {/* ✅ IMAGE PREVIEW */}
           {imagePreview && (
             <div className="mb-2 relative w-fit">
               <img src={imagePreview} alt="preview" className="max-h-40 rounded-lg border" />
