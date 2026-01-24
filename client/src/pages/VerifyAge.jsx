@@ -64,7 +64,7 @@ function VerifyAgeForm() {
     <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow space-y-4">
       <h2 className="text-lg font-semibold">Xác minh 18+</h2>
       <p className="text-sm text-gray-500">
-        Bạn cần xác minh bằng thẻ để xem nội dung nhạy cảm (không trừ tiền).
+        You need to verify your card to view sensitive content (no charges will be applied).
       </p>
 
       <div className="border rounded p-3">

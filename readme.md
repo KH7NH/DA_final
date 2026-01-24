@@ -42,6 +42,7 @@ efficientnet_b3_final.keras
 nsfw_mobilenetv2_3class.h5
 
 ▶️ Chạy AI Service
+venv\Scripts\activate
 uvicorn main:app --host 0.0.0.0 --port 8001
 
 

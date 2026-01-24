@@ -23,7 +23,10 @@ const getCurrentUser = async (authFn) => {
    HELPER: CALL AI SERVICE (moderation)
 ===================================================== */
 const moderateImageBuffer = async (buffer, fileName = "image.jpg") => {
-  const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
+  const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || "http://127.0.0.1:8001").replace(
+    /\/$/,
+    ""
+  );
 
   try {
     const form = new FormData();
@@ -58,35 +61,88 @@ export const addPost = async (req, res) => {
 
     // ✅ default để tránh undefined
     let { content = "", post_type = "" } = req.body || {};
-    let images = req.files || [];
+    const images = req.files || [];
 
     let image_urls = [];
     let image_file_paths = [];
     let is_sensitive = false;
-
-    // ✅ FIX: moderation phải là let nếu bạn gán lại
     let moderation = [];
 
+    // =============================
+    // 0) validate input
+    // =============================
+    if (!images.length && !content?.trim()) {
+      return res.json({ success: false, message: "Please add at least one image or text" });
+    }
+
+    // =============================
+    // 1) MODERATION FIRST (NO UPLOAD YET)
+    // =============================
     if (images.length) {
-      const results = await Promise.all(
+      const moderationResults = await Promise.all(
         images.map(async (image) => {
           const buffer = fs.readFileSync(image.path);
 
-          // 1) AI moderation
           const ai = await moderateImageBuffer(buffer, image.originalname);
           const nsfw = Number(ai?.nsfw_sensitive_prob ?? ai?.nsfw_prob ?? 0);
           const gore = Number(ai?.gore_score ?? 0);
 
+          // ✅ ngưỡng bạn đang dùng
           const flagged = nsfw >= 0.85 || gore >= 0.75;
 
-          // 2) upload ImageKit
+          return {
+            file: image.originalname,
+            flagged,
+            nsfw_prob: Number.isFinite(nsfw) ? nsfw : null,
+            gore_score: Number.isFinite(gore) ? gore : null,
+          };
+        })
+      );
+
+      moderation = moderationResults.map((r) => ({
+        file: r.file,
+        is_sensitive: r.flagged,
+        nsfw_prob: r.nsfw_prob,
+        gore_score: r.gore_score,
+      }));
+
+      is_sensitive = moderationResults.some((r) => r.flagged);
+
+      // =============================
+      // 2) BLOCK UNVERIFIED USERS FROM POSTING FLAGGED CONTENT
+      // =============================
+      if (is_sensitive && (user.age_verified_level ?? 0) < 1) {
+        // cleanup temp files
+        for (const img of images) {
+          try {
+            fs.unlinkSync(img.path);
+          } catch (_) {}
+        }
+
+        return res.status(403).json({
+          success: false,
+          code: "AGE_VERIFICATION_REQUIRED",
+          message: "You need to verify your age before posting sensitive or violent images.",
+          moderation, // optional: để FE debug / hiển thị lý do
+        });
+      }
+
+      // =============================
+      // 3) UPLOAD IMAGEKIT (ONLY IF ALLOWED)
+      // =============================
+      const uploadResults = await Promise.all(
+        images.map(async (image, idx) => {
+          const buffer = fs.readFileSync(image.path);
+
+          const flagged = !!moderationResults[idx]?.flagged;
+
           const upload = await imagekit.upload({
             file: buffer,
             fileName: image.originalname,
             folder: "posts",
           });
 
-          // 3) display URL (blur if flagged)
+          // blur đúng ảnh bị flagged
           const transformation = flagged
             ? [{ blur: "60" }, { quality: "auto" }, { format: "webp" }, { width: "1280" }]
             : [{ quality: "auto" }, { format: "webp" }, { width: "1280" }];
@@ -96,35 +152,19 @@ export const addPost = async (req, res) => {
             transformation,
           });
 
-          // 4) cleanup temp file
+          // cleanup temp file
           try {
             fs.unlinkSync(image.path);
           } catch (_) {}
 
-          return {
-            displayUrl,
-            filePath: upload.filePath,
-            moderationItem: {
-              file: image.originalname,
-              is_sensitive: flagged,
-              nsfw_prob: Number.isFinite(nsfw) ? nsfw : null,
-              gore_score: Number.isFinite(gore) ? gore : null,
-            },
-            flagged,
-          };
+          return { displayUrl, filePath: upload.filePath };
         })
       );
 
-      image_urls = results.map((r) => r.displayUrl);
-      image_file_paths = results.map((r) => r.filePath);
+      image_urls = uploadResults.map((r) => r.displayUrl);
+      image_file_paths = uploadResults.map((r) => r.filePath);
 
-      // ✅ FIX: giờ gán lại OK vì moderation là let
-      moderation = results.map((r) => r.moderationItem);
-
-      // ✅ set cờ cấp bài
-      is_sensitive = results.some((r) => r.flagged);
-
-      // (optional) nếu post_type gửi lên bị rỗng thì tự set
+      // auto set post_type nếu thiếu
       if (!post_type) {
         post_type = content?.trim() ? "text_with_image" : "image";
       }
@@ -223,13 +263,20 @@ export const revealPost = async (req, res) => {
       return res.json({ success: true, originals: post.image_urls });
     }
 
-    // nhạy cảm → cần verify
+    // nhạy cảm → cần verify (✅ đồng bộ code)
     if ((user.age_verified_level ?? 0) < 1) {
-      return res.status(403).json({ success: false, message: "18+ only" });
+      return res.status(403).json({
+        success: false,
+        code: "AGE_VERIFICATION_REQUIRED",
+        message: "You need to verify your age (18+) to view this content.",
+      });
     }
 
     if (!post.image_file_paths?.length) {
-      return res.status(400).json({ success: false, message: "Missing image_file_paths for this post" });
+      return res.status(400).json({
+        success: false,
+        message: "Missing image_file_paths for this post",
+      });
     }
 
     const originals = post.image_file_paths.map((p) =>
@@ -244,3 +291,4 @@ export const revealPost = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+

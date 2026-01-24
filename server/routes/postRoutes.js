@@ -5,11 +5,9 @@ import { addPost, getFeedPosts, likePost, revealPost } from "../controllers/post
 
 const postRouter = express.Router();
 
-postRouter.post("/add", upload.array("images", 10), protect, addPost);
+postRouter.post("/add", protect, upload.array("images", 10), addPost);
 postRouter.get("/feed", protect, getFeedPosts);
 postRouter.post("/like", protect, likePost);
-
-// ✅ reveal original images for sensitive posts
 postRouter.post("/reveal", protect, revealPost);
 
 export default postRouter;
